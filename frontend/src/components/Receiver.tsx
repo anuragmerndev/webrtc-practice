@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 export const Receiver = () => {
-  const [clicked, setClicked] = useState(false);
   useEffect(() => {
     const socket = new WebSocket("ws://localhost:8001");
     socket.onopen = () => {
@@ -11,16 +10,17 @@ export const Receiver = () => {
         })
       );
     };
-    if(clicked) {startReceiving(socket);}
-  }, [clicked]);
+   startReceiving(socket);
+  }, []);
 
   function startReceiving(socket: WebSocket) {
     const video = document.createElement("video");
-    document.body.appendChild(video);
-
+    const videoBox = document.getElementById("videoBox");
+    videoBox?.appendChild(video);
     const pc = new RTCPeerConnection();
     pc.ontrack = (event) => {
-      video.srcObject = new MediaStream([event.track]);
+     const stream = new MediaStream([event.track]);
+      video.srcObject = stream;
       video.muted = true;
       video.play();
     };
@@ -46,8 +46,11 @@ export const Receiver = () => {
   }
 
   return (
-    <div>
-      Reciver: <button onClick={() => setClicked(!clicked)}>recieve video</button>
+    <div style={{
+      display: "flex",
+      flexDirection: "column"
+    }} id="videoBox">
+      Reciver: recieve video
     </div>
   );
 };
