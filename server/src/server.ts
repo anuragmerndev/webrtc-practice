@@ -4,43 +4,51 @@ const wss = new WebSocketServer({
     port: 8001,
 });
 
-let senderSocket: null | WebSocket;
-let recieverSocket: null | WebSocket;
+let participantOne: null | WebSocket;
+let participantTwo: null | WebSocket;
 
 wss.on("connection", (socket: WebSocket) => {
     socket.on("error", console.error);
 
     socket.on('message', (data) => {
         const parsedData = JSON.parse(data.toString());
-        console.log({parsedData});
+        // console.log(parsedData);
         
-        if (parsedData.type === "SENDER") {
-            senderSocket = socket;
+        if (parsedData.type === "PARTICIPANT_ONE") {
+            participantOne = socket;
         }
-        if (parsedData.type === "RECIEVER") {
-            recieverSocket = socket;
+        if (parsedData.type === "PARTICIPANT_TWO") {
+            participantTwo = socket;
         }
 
         if (parsedData.type === "CREATE_OFFER") {
-            if (senderSocket !== socket) {
-                return;
+            console.log(parsedData, {one: socket === participantOne, two: socket === participantTwo});
+            
+           if(socket === participantOne) {
+               participantTwo?.send(JSON.stringify({ type: "CREATE_OFFER", sdp: parsedData.sdp }))
             }
+            
+            if (socket === participantTwo) {
+                participantOne?.send(JSON.stringify({ type: "CREATE_OFFER", sdp: parsedData.sdp }))
+           }
 
-            recieverSocket?.send(JSON.stringify({ type: "CREATE_OFFER", sdp: parsedData.sdp }))
         }
 
         if (parsedData.type === "CREATE_ANSWER") {
-            if (recieverSocket !== socket) {
-                return;
+            if(socket === participantOne) {
+                participantTwo?.send(JSON.stringify({type: "CREATE_ANSWER", sdp: parsedData.sdp}))
+            }
+            
+            if(socket === participantTwo) {
+                participantOne?.send(JSON.stringify({type: "CREATE_ANSWER", sdp: parsedData.sdp}))
             }
 
-            senderSocket?.send(JSON.stringify({type: "CREATE_ANSWER", sdp: parsedData.sdp}))
         }
         if (parsedData.type === 'ICE_CANDIDATE') {
-            if (socket === senderSocket) {
-                recieverSocket?.send(JSON.stringify({ type: 'ICE_CANDIDATE', candidate: parsedData.candidate }));
-            } else if (socket === recieverSocket) {
-                senderSocket?.send(JSON.stringify({ type: 'ICE_CANDIDATE', candidate: parsedData.candidate }));
+            if (socket === participantOne) {
+                participantTwo?.send(JSON.stringify({ type: 'ICE_CANDIDATE', candidate: parsedData.candidate }));
+            } else if (socket === participantTwo) {
+                participantOne?.send(JSON.stringify({ type: 'ICE_CANDIDATE', candidate: parsedData.candidate }));
             }
         }
 
