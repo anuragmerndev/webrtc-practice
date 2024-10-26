@@ -2,36 +2,51 @@ import { useEffect, useState } from "react";
 
 export const Receiver = () => {
   const [socket, setSocket] = useState<null | WebSocket>(null);
+    const [peerConnection, setPeerConnection] =
+      useState<RTCPeerConnection | null>(null);
   useEffect(() => {
-    const socket = new WebSocket("ws://localhost:8001");
-    socket.onopen = () => {
-      setSocket(socket);
-      socket.send(
-        JSON.stringify({
-          type: "PARTICIPANT_TWO",
-        })
-      );
-    };
-     const recievePC = new RTCPeerConnection();
-     startReceiving(recievePC);
-     socket.onmessage = async (ev) => {
-       const message = JSON.parse(ev.data);
-       console.log({message});
-       
-       if (message.type === "CREATE_OFFER") {
-         await recievePC.setRemoteDescription(message.sdp);
-         const answer = await recievePC.createAnswer();
-         await recievePC.setLocalDescription(answer);
-         socket.send(
-           JSON.stringify({
-             type: "CREATE_ANSWER",
-             sdp: answer,
-           })
-         );
-       } else if (message.type === "ICE_CANDIDATE") {
-         await recievePC.addIceCandidate(message.candidate);
-       }
-     };
+   const socket = new WebSocket("ws://localhost:8001");
+   const recievePC = new RTCPeerConnection();
+   setPeerConnection(recievePC); // Store the PC in state
+
+   socket.onopen = () => {
+     setSocket(socket);
+     socket.send(
+       JSON.stringify({
+         type: "PARTICIPANT_TWO",
+       })
+     );
+   };
+
+   // Keep this message handler for receiving
+   socket.onmessage = async (ev) => {
+     const message = JSON.parse(ev.data);
+     console.log("Receive handler:", message);
+
+     if (message.type === "CREATE_OFFER") {
+       await recievePC.setRemoteDescription(message.sdp);
+       const answer = await recievePC.createAnswer();
+       await recievePC.setLocalDescription(answer);
+       socket.send(
+         JSON.stringify({
+           type: "CREATE_ANSWER",
+           sdp: answer,
+         })
+       );
+     } else if (message.type === "ICE_CANDIDATE") {
+       await recievePC.addIceCandidate(message.candidate);
+     } else if (message.type === "CREATE_ANSWER") {
+       // Add this condition to handle answers when sending
+       await recievePC.setRemoteDescription(message.sdp);
+     }
+   };
+
+   startReceiving(recievePC);
+
+   return () => {
+     socket.close();
+     recievePC.close();
+   };
   }, []);
 
   function startReceiving(recievePC: RTCPeerConnection) {
@@ -55,44 +70,37 @@ export const Receiver = () => {
   }
 
   const initConn = async () => {
-    if (!socket) {
-      alert("socket not connected");
-      return;
-    }
+     if (!socket || !peerConnection) {
+       // Check for both socket and PC
+       alert("socket not connected");
+       return;
+     }
 
-    socket.onmessage = async (event: MessageEvent) => {
-      const message = JSON.parse(event.data);
-      if (message.type === "CREATE_ANSWER") {
-        await pc?.setRemoteDescription(message.sdp);
-      } else if (message.type === "ICE_CANDIDATE") {
-        await pc?.addIceCandidate(message.candidate);
-      }
-    };
+     // Remove the socket.onmessage override here since we're handling all messages in the useEffect
 
-    const pc = new RTCPeerConnection();
-    pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
-      if (event.candidate) {
-        socket.send(
-          JSON.stringify({
-            type: "ICE_CANDIDATE",
-            candidate: event.candidate,
-          })
-        );
-      }
-    };
+     peerConnection.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+       if (event.candidate) {
+         socket.send(
+           JSON.stringify({
+             type: "ICE_CANDIDATE",
+             candidate: event.candidate,
+           })
+         );
+       }
+     };
 
-    pc.onnegotiationneeded = async () => {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.send(
-        JSON.stringify({
-          type: "CREATE_OFFER",
-          sdp: pc.localDescription,
-        })
-      );
-    };
+     peerConnection.onnegotiationneeded = async () => {
+       const offer = await peerConnection.createOffer();
+       await peerConnection.setLocalDescription(offer);
+       socket.send(
+         JSON.stringify({
+           type: "CREATE_OFFER",
+           sdp: peerConnection.localDescription,
+         })
+       );
+     };
 
-    getStreamAndCameraAccess(pc);
+     getStreamAndCameraAccess(peerConnection);
   };
 
   const getStreamAndCameraAccess = (pc: RTCPeerConnection) => {
