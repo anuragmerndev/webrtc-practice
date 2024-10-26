@@ -6,6 +6,7 @@ import { Receiver } from "./components/Receiver";
 function App() {
   return (
     <BrowserRouter>
+    Hello this is new
       <Routes>
         <Route path="/reciever" element={<Receiver />} />
         <Route path="/sender" element={<Sender />} />
