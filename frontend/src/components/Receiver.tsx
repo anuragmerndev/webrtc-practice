@@ -5,7 +5,7 @@ export const Receiver = () => {
     const [peerConnection, setPeerConnection] =
       useState<RTCPeerConnection | null>(null);
   useEffect(() => {
-   const socket = new WebSocket("ws://localhost:8001");
+   const socket = new WebSocket(import.meta.env.VITE_BACKEND_URL);
    const recievePC = new RTCPeerConnection();
    setPeerConnection(recievePC); // Store the PC in state
 
