@@ -1,0 +1,5 @@
+echo "[Husky] running frontend build"
+cd frontend && npm run build && cd ../
+
+echo "[Husky] running backend build"
+cd server && npm run build
