@@ -1,118 +1,102 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { SocketMessage } from "../types/common";
 
 export const Receiver = () => {
   const [socket, setSocket] = useState<null | WebSocket>(null);
-    const [peerConnection, setPeerConnection] =
-      useState<RTCPeerConnection | null>(null);
+  const [peerConnection, setPeerConnection] =
+    useState<RTCPeerConnection | null>(null);
+
+ const [senderVideoMedia, setSenderVideoMedia] = useState<MediaStream | null>(
+   null
+ );
+
+ const senderVideoRef = useRef<HTMLVideoElement | null>(null);
+ const recieverVideoRef = useRef<HTMLVideoElement | null>(null);
+
   useEffect(() => {
-   const socket = new WebSocket(import.meta.env.VITE_BACKEND_URL);
-   const recievePC = new RTCPeerConnection();
-   setPeerConnection(recievePC); // Store the PC in state
+    const socket = new WebSocket(import.meta.env.VITE_BACKEND_URL);
+    const recievePC = new RTCPeerConnection();
+    setPeerConnection(recievePC);
+    
+    socket.onopen = () => {
+      setSocket(socket);
+      socket.send(JSON.stringify({ type: "PARTICIPANT_TWO" }));
+    };
 
-   socket.onopen = () => {
-     setSocket(socket);
-     socket.send(
-       JSON.stringify({
-         type: "PARTICIPANT_TWO",
-       })
-     );
-   };
+    socket.onmessage = async (messageEv: MessageEvent) => {
+      const message: SocketMessage = JSON.parse(messageEv.data);
+      console.log("recieved message :", message);
 
-   // Keep this message handler for receiving
-   socket.onmessage = async (ev) => {
-     const message = JSON.parse(ev.data);
-     console.log("Receive handler:", message);
+      if (!recievePC) return;
+      switch (message.type) {
+        case "CREATE_OFFER": {
+          await recievePC.setRemoteDescription(message.sdp);
+          const answer = await recievePC.createAnswer();
+          await recievePC.setLocalDescription(answer);
+          socket.send(JSON.stringify({ type: "CREATE_ANSWER", sdp: answer }));
+          break;
+        }
+        case "CREATE_ANSWER":
+          await recievePC.setRemoteDescription(message.sdp);
+          break;
+        case "ICE_CANDIDATE":
+          await recievePC.addIceCandidate(message.candidate);
+          break;
+        default:
+          break;
+      }
+    };
 
-     if (message.type === "CREATE_OFFER") {
-       await recievePC.setRemoteDescription(message.sdp);
-       const answer = await recievePC.createAnswer();
-       await recievePC.setLocalDescription(answer);
-       socket.send(
-         JSON.stringify({
-           type: "CREATE_ANSWER",
-           sdp: answer,
-         })
-       );
-     } else if (message.type === "ICE_CANDIDATE") {
-       await recievePC.addIceCandidate(message.candidate);
-     } else if (message.type === "CREATE_ANSWER") {
-       // Add this condition to handle answers when sending
-       await recievePC.setRemoteDescription(message.sdp);
-     }
-   };
+    recievePC.ontrack = (ev: RTCTrackEvent) => {
+      const stream = new MediaStream([ev.track]);
+      if (!recieverVideoRef.current) return;
+      recieverVideoRef.current.srcObject = stream;
+    };
 
-   startReceiving(recievePC);
-
-   return () => {
-     socket.close();
-     recievePC.close();
-   };
+    return () => {
+      socket.close();
+      recievePC.close();
+    };
   }, []);
 
-  function startReceiving(recievePC: RTCPeerConnection) {
-    try {
-      console.log("hello");
-      
-      const video = document.createElement("video");
-      const videoBox = document.getElementById("videoBoxRecieve");
-      recievePC.ontrack = (event) => {
-        videoBox?.appendChild(video);
-        const stream = new MediaStream([event.track]);
-        console.log({ stream });
-
-        video.srcObject = stream;
-        video.muted = true;
-        video.play();
-      };
-    } catch (err) {
-      console.log("error connecting", { err });
-    }
-  }
-
   const initConn = async () => {
-     if (!socket || !peerConnection) {
-       // Check for both socket and PC
-       alert("socket not connected");
-       return;
-     }
+    if (!socket || !peerConnection) {
+      alert("socket not connected");
+      return;
+    }
 
-     // Remove the socket.onmessage override here since we're handling all messages in the useEffect
+    peerConnection.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+      if (event.candidate) {
+        socket.send(
+          JSON.stringify({
+            type: "ICE_CANDIDATE",
+            candidate: event.candidate,
+          })
+        );
+      }
+    };
 
-     peerConnection.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
-       if (event.candidate) {
-         socket.send(
-           JSON.stringify({
-             type: "ICE_CANDIDATE",
-             candidate: event.candidate,
-           })
-         );
-       }
-     };
+    peerConnection.onnegotiationneeded = async () => {
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      socket.send(
+        JSON.stringify({
+          type: "CREATE_OFFER",
+          sdp: peerConnection.localDescription,
+        })
+      );
+    };
 
-     peerConnection.onnegotiationneeded = async () => {
-       const offer = await peerConnection.createOffer();
-       await peerConnection.setLocalDescription(offer);
-       socket.send(
-         JSON.stringify({
-           type: "CREATE_OFFER",
-           sdp: peerConnection.localDescription,
-         })
-       );
-     };
-
-     getStreamAndCameraAccess(peerConnection);
+    getStreamAndCameraAccess(peerConnection);
   };
 
   const getStreamAndCameraAccess = (pc: RTCPeerConnection) => {
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((stream: MediaStream) => {
-        const video = document.createElement("video");
-        video.srcObject = stream;
-        video.play();
-
-        const videoBox = document.getElementById("videoBoxSend");
-        videoBox?.appendChild(video);
+        if(!senderVideoRef.current) return;
+        senderVideoRef.current.srcObject = stream;
+        setSenderVideoMedia(stream);
         stream.getTracks().forEach((track) => {
           pc.addTrack(track);
         });
@@ -130,6 +114,7 @@ export const Receiver = () => {
         id="videoBoxRecieve"
       >
         Reciver: recieve video
+        <video ref={recieverVideoRef} muted autoPlay></video>
       </div>
       <div
         style={{
@@ -146,9 +131,11 @@ export const Receiver = () => {
             margin: "1rem 0",
           }}
           onClick={initConn}
+          disabled={Boolean(senderVideoMedia)}
         >
           Send Video
         </button>
+        <video ref={senderVideoRef} muted autoPlay></video>
       </div>
     </div>
   );

@@ -1,49 +1,55 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { SocketMessage } from "../types/common";
 
 export function Sender() {
   const [socket, setSocket] = useState<null | WebSocket>(null);
   const [peerConnection, setPeerConnection] =
     useState<RTCPeerConnection | null>(null);
+  const [senderVideoMedia, setSenderVideoMedia] = useState<MediaStream | null>(
+    null
+  );
+
+  const senderVideoRef = useRef<HTMLVideoElement | null>(null);
+  const recieverVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     const socket = new WebSocket(import.meta.env.VITE_BACKEND_URL);
     setSocket(socket);
     const recievePC = new RTCPeerConnection();
-    setPeerConnection(recievePC); // Store the PC in state
+    setPeerConnection(recievePC);
 
     socket.onopen = () => {
       socket.send(JSON.stringify({ type: "PARTICIPANT_ONE" }));
     };
 
-    // Keep this message handler for receiving
-    socket.onmessage = async (ev) => {
-      const message = JSON.parse(ev.data);
-      console.log("Receive handler:", message);
+    socket.onmessage = async (mesEv: MessageEvent) => {
+      const message: SocketMessage = JSON.parse(mesEv.data);
+      console.log("recieved message :", message);
 
       if (!recievePC) return;
-
-      if (message.type === "CREATE_OFFER") {
-        await recievePC.setRemoteDescription(message.sdp);
-        const answer = await recievePC.createAnswer();
-        await recievePC.setLocalDescription(answer);
-        socket.send(JSON.stringify({ type: "CREATE_ANSWER", sdp: answer }));
-      } else if (message.type === "ICE_CANDIDATE") {
-        await recievePC.addIceCandidate(message.candidate);
-      } else if (message.type === "CREATE_ANSWER") {
-        // Add this condition to handle answers when sending
-        await recievePC.setRemoteDescription(message.sdp);
+      switch (message.type) {
+        case "CREATE_OFFER": {
+          await recievePC.setRemoteDescription(message.sdp);
+          const answer = await recievePC.createAnswer();
+          await recievePC.setLocalDescription(answer);
+          socket.send(JSON.stringify({ type: "CREATE_ANSWER", sdp: answer }));
+          break;
+        }
+        case "CREATE_ANSWER":
+          await recievePC.setRemoteDescription(message.sdp);
+          break;
+        case "ICE_CANDIDATE":
+          await recievePC.addIceCandidate(message.candidate);
+          break;
+        default:
+          break;
       }
     };
 
-    recievePC.ontrack = (event) => {
-      const stream = new MediaStream([event.track]);
-      const video = document.createElement("video");
-      video.srcObject = stream;
-      video.muted = true;
-      video.play();
-
-      const recieveVideoBox = document.getElementById("videoBoxRecieve");
-      recieveVideoBox?.append(video);
+    recievePC.ontrack = (ev: RTCTrackEvent) => {
+      const stream = new MediaStream([ev.track]);
+      if (!recieverVideoRef.current) return;
+      recieverVideoRef.current.srcObject = stream;
     };
 
     return () => {
@@ -52,28 +58,8 @@ export function Sender() {
     };
   }, []);
 
-  // const startReceiving = (recievePC: RTCPeerConnection) => {
-  //   try {
-  //     console.log("here");
-
-  //     const recieveVideoBox = document.getElementById("videoBoxRecieve");
-  //     const video = document.createElement("video");
-  //     recieveVideoBox?.append(video);
-
-  //     recievePC.ontrack = (event) => {
-  //       const stream = new MediaStream([event.track]);
-  //       video.srcObject = stream;
-  //       video.muted = true;
-  //       video.play();
-  //     };
-  //   } catch (err) {
-  //     console.log("error connecting", { err });
-  //   }
-  // };
-
   const initConn = async () => {
     if (!socket || !peerConnection) {
-      // Check for both socket and PC
       alert("socket or peer connection not found");
       return;
     }
@@ -107,12 +93,9 @@ export function Sender() {
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((stream: MediaStream) => {
-        const video = document.createElement("video");
-        video.srcObject = stream;
-        video.play();
-
-        const videoBox = document.getElementById("videoBox");
-        videoBox?.appendChild(video);
+        if (!senderVideoRef.current) return;
+        senderVideoRef.current.srcObject = stream;
+        setSenderVideoMedia(stream);
         stream.getTracks().forEach((track) => {
           pc.addTrack(track);
         });
@@ -136,9 +119,11 @@ export function Sender() {
             margin: "1rem 0",
           }}
           onClick={initConn}
+          disabled={Boolean(senderVideoMedia)}
         >
           Send Video
         </button>
+        <video ref={senderVideoRef} muted autoPlay></video>
       </div>
       <div
         style={{
@@ -150,6 +135,7 @@ export function Sender() {
         id="videoBoxRecieve"
       >
         Participant Two
+        <video ref={recieverVideoRef} muted autoPlay></video>
       </div>
     </div>
   );
