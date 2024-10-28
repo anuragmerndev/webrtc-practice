@@ -8,18 +8,18 @@ export const Receiver = () => {
     useState<RTCPeerConnection | null>(null);
   const [muted, setMuted] = useState(true);
 
- const [senderVideoMedia, setSenderVideoMedia] = useState<MediaStream | null>(
-   null
- );
+  const [senderVideoMedia, setSenderVideoMedia] = useState<MediaStream | null>(
+    null
+  );
 
- const senderVideoRef = useRef<HTMLVideoElement | null>(null);
- const recieverVideoRef = useRef<HTMLVideoElement | null>(null);
+  const senderVideoRef = useRef<HTMLVideoElement | null>(null);
+  const recieverVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     const socket = new WebSocket(import.meta.env.VITE_BACKEND_URL);
     const recievePC = new RTCPeerConnection(rtcConfig);
     setPeerConnection(recievePC);
-    
+
     socket.onopen = () => {
       setSocket(socket);
       socket.send(JSON.stringify({ type: "PARTICIPANT_TWO" }));
@@ -48,22 +48,23 @@ export const Receiver = () => {
           break;
       }
     };
-    
-        let inboundStreams: null | MediaStream = null;
-        recievePC.ontrack = (ev: RTCTrackEvent) => {
-          if (!recieverVideoRef.current) return;
-          if (ev.streams && ev.streams[0]) {
-            recieverVideoRef.current.srcObject = ev.streams[0];
-          } else {
-            if (ev.track) {
-              if (!inboundStreams) {
-                inboundStreams = new MediaStream();
-                recieverVideoRef.current.srcObject = inboundStreams;
-              }
-              inboundStreams.addTrack(ev.track);
-            }
+
+    let inboundStreams: null | MediaStream = null;
+    recievePC.ontrack = (ev: RTCTrackEvent) => {
+      if (!recieverVideoRef.current) return;
+      if (ev.streams && ev.streams[0]) {
+        recieverVideoRef.current.srcObject = ev.streams[0];
+      } else {
+        if (ev.track) {
+          if (!inboundStreams) {
+            inboundStreams = new MediaStream();
+            recieverVideoRef.current.srcObject = inboundStreams;
           }
-        };
+          inboundStreams.addTrack(ev.track);
+        }
+      }
+      recieverVideoRef.current.style.transform = "scale(-1, 1)";
+    };
 
     return () => {
       socket.close();
@@ -106,8 +107,9 @@ export const Receiver = () => {
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((stream: MediaStream) => {
-        if(!senderVideoRef.current) return;
+        if (!senderVideoRef.current) return;
         senderVideoRef.current.srcObject = stream;
+        senderVideoRef.current.style.transform = "scale(-1, 1)";
         setSenderVideoMedia(stream);
         stream.getTracks().forEach((track) => {
           pc.addTrack(track, stream);
@@ -116,10 +118,10 @@ export const Receiver = () => {
   };
 
   const toggleMute = () => {
-    if(!recieverVideoRef.current) return;
+    if (!recieverVideoRef.current) return;
     setMuted((prev) => !prev);
     recieverVideoRef.current.muted = !muted;
-  }
+  };
 
   return (
     <div style={{ display: "flex", width: "80dvw", height: "100dvh" }}>
@@ -133,7 +135,9 @@ export const Receiver = () => {
         id="videoBoxRecieve"
       >
         Reciver: recieve video
-        <button style={{margin: "1rem 0"}} onClick={toggleMute}>{muted ? "UnMute" : "Mute"}</button>
+        <button style={{ margin: "1rem 0" }} onClick={toggleMute}>
+          {muted ? "UnMute" : "Mute"}
+        </button>
         <video ref={recieverVideoRef} muted={muted} autoPlay></video>
       </div>
       <div

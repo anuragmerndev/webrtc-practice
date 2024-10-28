@@ -62,6 +62,7 @@ export function Sender() {
           inboundStreams.addTrack(ev.track);
         }
       }
+      recieverVideoRef.current.style.transform = "scale(-1, 1)";
     };
 
     return () => {
@@ -107,6 +108,7 @@ export function Sender() {
       .then((stream: MediaStream) => {
         if (!senderVideoRef.current) return;
         senderVideoRef.current.srcObject = stream;
+        senderVideoRef.current.style.transform = "scale(-1, 1)";
         setSenderVideoMedia(stream);
         stream.getTracks().forEach((track) => {
           pc.addTrack(track, stream);
