@@ -17,7 +17,9 @@ export function Sender() {
   useEffect(() => {
     const socket = new WebSocket(import.meta.env.VITE_BACKEND_URL);
     setSocket(socket);
-    const recievePC = new RTCPeerConnection();
+    const recievePC = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
     setPeerConnection(recievePC);
 
     socket.onopen = () => {
