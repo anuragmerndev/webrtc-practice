@@ -48,9 +48,20 @@ export function Sender() {
       }
     };
 
+    let inboundStreams: null | MediaStream = null;
     recievePC.ontrack = (ev: RTCTrackEvent) => {
       if (!recieverVideoRef.current) return;
-      recieverVideoRef.current.srcObject = ev.streams[0];
+      if(ev.streams && ev.streams[0]) {
+        recieverVideoRef.current.srcObject = ev.streams[0]
+      } else {
+        if(ev.track) {
+            if(!inboundStreams) {
+              inboundStreams = new MediaStream();
+              recieverVideoRef.current.srcObject = inboundStreams;
+            }
+          inboundStreams.addTrack(ev.track);
+        }
+      }
     };
 
     return () => {
