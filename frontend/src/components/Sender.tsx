@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { SocketMessage } from "../types/common";
+import { rtcConfig } from "../utils/helper";
 
 export function Sender() {
   const [socket, setSocket] = useState<null | WebSocket>(null);
@@ -10,16 +11,13 @@ export function Sender() {
   );
   const [muted, setMuted] = useState(true);
 
-
   const senderVideoRef = useRef<HTMLVideoElement | null>(null);
   const recieverVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     const socket = new WebSocket(import.meta.env.VITE_BACKEND_URL);
     setSocket(socket);
-    const recievePC = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    });
+    const recievePC = new RTCPeerConnection(rtcConfig);
     setPeerConnection(recievePC);
 
     socket.onopen = () => {
@@ -53,14 +51,14 @@ export function Sender() {
     let inboundStreams: null | MediaStream = null;
     recievePC.ontrack = (ev: RTCTrackEvent) => {
       if (!recieverVideoRef.current) return;
-      if(ev.streams && ev.streams[0]) {
-        recieverVideoRef.current.srcObject = ev.streams[0]
+      if (ev.streams && ev.streams[0]) {
+        recieverVideoRef.current.srcObject = ev.streams[0];
       } else {
-        if(ev.track) {
-            if(!inboundStreams) {
-              inboundStreams = new MediaStream();
-              recieverVideoRef.current.srcObject = inboundStreams;
-            }
+        if (ev.track) {
+          if (!inboundStreams) {
+            inboundStreams = new MediaStream();
+            recieverVideoRef.current.srcObject = inboundStreams;
+          }
           inboundStreams.addTrack(ev.track);
         }
       }
