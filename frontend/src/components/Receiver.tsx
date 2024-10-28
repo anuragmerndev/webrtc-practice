@@ -5,6 +5,7 @@ export const Receiver = () => {
   const [socket, setSocket] = useState<null | WebSocket>(null);
   const [peerConnection, setPeerConnection] =
     useState<RTCPeerConnection | null>(null);
+  const [muted, setMuted] = useState(true);
 
  const [senderVideoMedia, setSenderVideoMedia] = useState<MediaStream | null>(
    null
@@ -46,11 +47,10 @@ export const Receiver = () => {
           break;
       }
     };
-
-    recievePC.ontrack = (ev: RTCTrackEvent) => {
-      const stream = new MediaStream([ev.track]);
+    
+    recievePC.ontrack = (ev: RTCTrackEvent) => { 
       if (!recieverVideoRef.current) return;
-      recieverVideoRef.current.srcObject = stream;
+      recieverVideoRef.current.srcObject = ev.streams[0];
     };
 
     return () => {
@@ -98,10 +98,16 @@ export const Receiver = () => {
         senderVideoRef.current.srcObject = stream;
         setSenderVideoMedia(stream);
         stream.getTracks().forEach((track) => {
-          pc.addTrack(track);
+          pc.addTrack(track, stream);
         });
       });
   };
+
+  const toggleMute = () => {
+    if(!recieverVideoRef.current) return;
+    setMuted((prev) => !prev);
+    recieverVideoRef.current.muted = !muted;
+  }
 
   return (
     <div style={{ display: "flex", width: "80dvw", height: "100dvh" }}>
@@ -109,12 +115,14 @@ export const Receiver = () => {
         style={{
           display: "flex",
           flexDirection: "column",
+          alignItems: "center",
           border: "2px solid white",
         }}
         id="videoBoxRecieve"
       >
         Reciver: recieve video
-        <video ref={recieverVideoRef} muted autoPlay></video>
+        <button style={{margin: "1rem 0"}} onClick={toggleMute}>{muted ? "UnMute" : "Mute"}</button>
+        <video ref={recieverVideoRef} muted={muted} autoPlay></video>
       </div>
       <div
         style={{

@@ -8,6 +8,8 @@ export function Sender() {
   const [senderVideoMedia, setSenderVideoMedia] = useState<MediaStream | null>(
     null
   );
+  const [muted, setMuted] = useState(true);
+
 
   const senderVideoRef = useRef<HTMLVideoElement | null>(null);
   const recieverVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -47,9 +49,8 @@ export function Sender() {
     };
 
     recievePC.ontrack = (ev: RTCTrackEvent) => {
-      const stream = new MediaStream([ev.track]);
       if (!recieverVideoRef.current) return;
-      recieverVideoRef.current.srcObject = stream;
+      recieverVideoRef.current.srcObject = ev.streams[0];
     };
 
     return () => {
@@ -97,9 +98,15 @@ export function Sender() {
         senderVideoRef.current.srcObject = stream;
         setSenderVideoMedia(stream);
         stream.getTracks().forEach((track) => {
-          pc.addTrack(track);
+          pc.addTrack(track, stream);
         });
       });
+  };
+
+  const toggleMute = () => {
+    if (!recieverVideoRef.current) return;
+    setMuted((prev) => !prev);
+    recieverVideoRef.current.muted = !muted;
   };
 
   return (
@@ -135,6 +142,9 @@ export function Sender() {
         id="videoBoxRecieve"
       >
         Participant Two
+        <button style={{ margin: "1rem 0" }} onClick={toggleMute}>
+          {muted ? "UnMute" : "Mute"}
+        </button>
         <video ref={recieverVideoRef} muted autoPlay></video>
       </div>
     </div>
