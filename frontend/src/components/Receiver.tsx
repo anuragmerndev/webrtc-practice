@@ -7,6 +7,7 @@ export const Receiver = () => {
   const [peerConnection, setPeerConnection] =
     useState<RTCPeerConnection | null>(null);
   const [muted, setMuted] = useState(true);
+  const [selfMute, setSelfMute] = useState<boolean>(false);
 
   const [senderVideoMedia, setSenderVideoMedia] = useState<MediaStream | null>(
     null
@@ -131,7 +132,6 @@ export const Receiver = () => {
       .then((stream: MediaStream) => {
         getDevices();
         if (!senderVideoRef.current) return;
-        senderVideoRef.current.style.transform = "scale(-1, 1)";
         setSenderVideoMedia(stream);
         stream.getTracks().forEach((track) => {
           pc.addTrack(track, stream);
@@ -165,6 +165,17 @@ export const Receiver = () => {
       });
   };
 
+    const toggleSelfMute = () => {
+      if (!senderVideoMedia) return;
+      setSelfMute((prev) => !prev);
+      senderVideoMedia.getAudioTracks()[0].enabled = selfMute;
+      setSenderVideoMedia(senderVideoMedia);
+      const sender = peerConnection
+        ?.getSenders()
+        .find((s) => s.track!.kind === "audio");
+      sender?.replaceTrack(senderVideoMedia.getAudioTracks()[0]);
+    };
+
   return (
     <div style={{ display: "flex", width: "80dvw", height: "100dvh" }}>
       <div
@@ -180,7 +191,14 @@ export const Receiver = () => {
         <button style={{ margin: "1rem 0" }} onClick={toggleMute}>
           {muted ? "UnMute" : "Mute"}
         </button>
-        <video ref={recieverVideoRef} muted={muted} autoPlay></video>
+        <video
+          ref={recieverVideoRef}
+          muted={muted}
+          autoPlay
+          style={{
+            transform: "scale(-1, 1)",
+          }}
+        ></video>
       </div>
       <div
         style={{
@@ -196,17 +214,16 @@ export const Receiver = () => {
           style={{
             display: "flex",
             justifyContent: "space-around",
+            alignItems: "flex-start",
             width: "50dvw",
+            margin: "1rem 0",
           }}
         >
-          <button
-            style={{
-              margin: "1rem 0",
-            }}
-            onClick={initConn}
-            disabled={Boolean(senderVideoMedia)}
-          >
+          <button onClick={initConn} disabled={Boolean(senderVideoMedia)}>
             Send Video
+          </button>
+          <button onClick={toggleSelfMute} disabled={!senderVideoMedia}>
+            {selfMute ? "unmute" : "mute"}
           </button>
           {availableVideoDevices && (
             <div style={{ display: "flex", flexDirection: "column" }}>
@@ -228,7 +245,14 @@ export const Receiver = () => {
             </div>
           )}
         </div>
-        <video ref={senderVideoRef} muted autoPlay></video>
+        <video
+          ref={senderVideoRef}
+          muted
+          autoPlay
+          style={{
+            transform: "scale(-1, 1)",
+          }}
+        ></video>
       </div>
     </div>
   );
