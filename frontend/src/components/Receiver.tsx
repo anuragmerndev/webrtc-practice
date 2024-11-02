@@ -11,14 +11,31 @@ export const Receiver = () => {
   const [senderVideoMedia, setSenderVideoMedia] = useState<MediaStream | null>(
     null
   );
+  const [availableVideoDevices, setAvailableVideoDevices] = useState<
+    MediaDeviceInfo[] | null
+  >(null);
 
   const senderVideoRef = useRef<HTMLVideoElement | null>(null);
   const recieverVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  async function getDevices() {
+    const checkCameraPermission = await navigator.permissions.query({
+      // @ts-expect-error name is not visible here
+      name: "camera",
+    });
+    if (checkCameraPermission.state !== "granted") return;
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices?.filter(
+      (inpDev) => inpDev.kind === "videoinput"
+    );
+    setAvailableVideoDevices(videoDevices);
+  }
 
   useEffect(() => {
     const socket = new WebSocket(import.meta.env.VITE_BACKEND_URL);
     const recievePC = new RTCPeerConnection(rtcConfig);
     setPeerConnection(recievePC);
+    getDevices();
 
     socket.onopen = () => {
       setSocket(socket);
@@ -72,6 +89,11 @@ export const Receiver = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!senderVideoRef.current) return;
+    senderVideoRef.current.srcObject = senderVideoMedia;
+  }, [senderVideoMedia]);
+
   const initConn = async () => {
     if (!socket || !peerConnection) {
       alert("socket not connected");
@@ -107,8 +129,8 @@ export const Receiver = () => {
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((stream: MediaStream) => {
+        getDevices();
         if (!senderVideoRef.current) return;
-        senderVideoRef.current.srcObject = stream;
         senderVideoRef.current.style.transform = "scale(-1, 1)";
         setSenderVideoMedia(stream);
         stream.getTracks().forEach((track) => {
@@ -121,6 +143,26 @@ export const Receiver = () => {
     if (!recieverVideoRef.current) return;
     setMuted((prev) => !prev);
     recieverVideoRef.current.muted = !muted;
+  };
+
+  const changeCamera = async (deviceID: string) => {
+    navigator.mediaDevices
+      .getUserMedia({
+        video: {
+          deviceId: {
+            exact: deviceID,
+          },
+        },
+        audio: true,
+      })
+      .then((stream) => {
+        setSenderVideoMedia(stream);
+        const [videoTrack] = stream.getVideoTracks();
+        const sender = peerConnection
+          ?.getSenders()
+          .find((s) => s.track!.kind === videoTrack.kind);
+        sender?.replaceTrack(videoTrack);
+      });
   };
 
   return (
@@ -150,15 +192,42 @@ export const Receiver = () => {
         id="videoBoxSend"
       >
         Send video:{" "}
-        <button
+        <div
           style={{
-            margin: "1rem 0",
+            display: "flex",
+            justifyContent: "space-around",
+            width: "50dvw",
           }}
-          onClick={initConn}
-          disabled={Boolean(senderVideoMedia)}
         >
-          Send Video
-        </button>
+          <button
+            style={{
+              margin: "1rem 0",
+            }}
+            onClick={initConn}
+            disabled={Boolean(senderVideoMedia)}
+          >
+            Send Video
+          </button>
+          {availableVideoDevices && (
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <label htmlFor="camera">Choose a camera:</label>
+              <select
+                name="camera"
+                id="camera"
+                onChange={(e) => changeCamera(e.target.value)}
+              >
+                {availableVideoDevices?.map((videoDevice) => (
+                  <option
+                    key={videoDevice.deviceId}
+                    value={videoDevice.deviceId}
+                  >
+                    {videoDevice.label}
+                  </option>
+                ))}
+              </select>{" "}
+            </div>
+          )}
+        </div>
         <video ref={senderVideoRef} muted autoPlay></video>
       </div>
     </div>
